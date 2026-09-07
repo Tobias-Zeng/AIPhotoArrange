@@ -1,0 +1,4 @@
+<resources>
+    <!-- 基础主题，实际颜色由 Compose 动态主题接管 -->
+    <style name="Theme.PhotoCleaner" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

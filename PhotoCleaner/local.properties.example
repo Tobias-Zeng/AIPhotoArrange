@@ -1,0 +1,18 @@
+# PhotoCleaner 本地构建配置示例
+# ------------------------------------------------------------
+# 复制本文件为 local.properties（已被 .gitignore 忽略），填入真实值。
+# Android SDK 路径由 Android Studio 自动生成，无需手填。
+#
+# release 签名凭据（缺失时 release 构建降级为 debug 签名）：
+#   RELEASE_STORE_FILE     keystore 文件路径（相对 PhotoCleaner/ 根目录）
+#   RELEASE_STORE_PASSWORD keystore 密码
+#   RELEASE_KEY_ALIAS      key 别名
+#   RELEASE_KEY_PASSWORD   key 密码
+#
+# 注意：分发前应轮换签名密钥（旧密码 photocleaner2026 已泄露在 git 历史，视为已失效）。
+
+# sdk.dir=C\:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
+RELEASE_STORE_FILE=photocleaner.keystore
+RELEASE_STORE_PASSWORD=<your-keystore-password>
+RELEASE_KEY_ALIAS=photocleaner
+RELEASE_KEY_PASSWORD=<your-key-password>

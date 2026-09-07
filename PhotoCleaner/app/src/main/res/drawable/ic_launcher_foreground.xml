@@ -1,0 +1,21 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 相册照片图标（简约风格）：外框 + 山峰 + 太阳，代表相册 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,34 h48 a4,4 0 0 1 4,4 v32 a4,4 0 0 1 -4,4 h-48 a4,4 0 0 1 -4,-4 v-32 a4,4 0 0 1 4,-4 z" />
+    <path
+        android:fillColor="#2196F3"
+        android:pathData="M33,41 h42 v26 h-42 z" />
+    <!-- 太阳 -->
+    <path
+        android:fillColor="#FFEB3B"
+        android:pathData="M66,48 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+    <!-- 山峰 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M33,67 l12,-14 l9,10 l7,-8 l14,12 z" />
+</vector>

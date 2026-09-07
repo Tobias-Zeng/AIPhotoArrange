@@ -1,0 +1,301 @@
+# ============================================================
+# AIPhotoArrange 流水线统一配置（发布模板）
+# ------------------------------------------------------------
+# 本文件是发布用模板，打包时由 build_exe.py 拷贝到 release/pipeline_config.yaml。
+# 所有密钥（amap_key / 各 provider 的 api_key）已脱敏为 xxxxxx，分发后请自行填入。
+# 每次运行只改这一个文件，三个处理脚本 + run_pipeline.py 都读它。
+# 不再需要进 .py 里手动改参数、也不用手动改中间文件名。
+#
+# 用法：
+#   python run_pipeline.py            # 断点续跑（保留已有进度）
+#   python run_pipeline.py --fresh    # 全新跑（自动归档旧的中间文件，不删除）
+#   python run_pipeline.py --only 02  # 只跑某一阶段
+# ============================================================
+
+# profile：当前激活哪个 profile（对应下方 profiles: 段里的一个 key）。
+#   - 激活的 profile 会给"用户专属"中间文件自动加后缀，实现多用户隔离，
+#     例：profile: profile1  ->  01_photo_batches_profile1.json / 02_progress_profile1.json ...
+#   - 切换用户只改这一行；也可临时用环境变量或命令行覆盖，不动配置文件：
+#       python run_pipeline.py --profile profile2
+#   - 留空则用不带后缀的默认文件名，且不套用任何 profile 覆盖。
+profile: "profile1"
+
+# ------------------------------------------------------------
+# 多 profile 定义
+# ------------------------------------------------------------
+# 每个 profile 只需写"和下面共享默认值不同"的部分（通常就是输入/输出目录）。
+# 加载时，激活 profile 的这些字段会深合并、覆盖掉下面 common/geo/curator/chunker
+# 里的同名项。想加新用户，照着复制一段、改 key 和目录即可。
+profiles:
+  profile1:
+    common:
+      source_dir: "D:\\照片整理输入_示例1"
+      target_dir: "D:\\照片整理输出_示例1"
+  profile2:
+    common:
+      source_dir: "D:\\照片整理输入_示例2"
+      target_dir: "D:\\照片整理输出_示例2"
+  profile3:
+    common:
+      source_dir: "D:\\照片整理输入_示例3"
+      target_dir: "D:\\照片整理输出_示例3"
+  profile4:
+    common:
+      source_dir: "D:\\照片整理输入_示例4"
+      target_dir: "D:\\照片整理输出_示例4"
+  # 示例：新增用户只需再加一段（下面这段被注释，去掉 # 即生效）
+  # ABC:
+  #   common:
+  #     source_dir: "D:\\ABC照片_整理输入"
+  #     target_dir: "D:\\ABC照片_整理输出"
+  #   curator:
+  #     provider: "dashscope"      # 该 profile 也可单独覆盖 provider / num_workers 等
+
+# ------------------------------------------------------------
+# 共享默认值（未被激活 profile 覆盖时生效，01a 与 02 共用）
+# ------------------------------------------------------------
+common:
+  # 照片输入目录（01a 扫描、02 归档的源，必须一致）--通常由 profile 覆盖
+  source_dir: "D:\\照片整理输入_示例1"
+  # 归档输出目录（02 用）--通常由 profile 覆盖
+  target_dir: "D:\\照片整理输出_示例1"
+  # 常驻地/家城市（01b 与 02 共用）
+  home_city: "重庆市"
+
+
+# ------------------------------------------------------------
+# 01a：phash + 时间双信号切批
+# ------------------------------------------------------------
+chunker:
+  phash_threshold: 22
+  merge_threshold: 18
+  max_batch_size: 10
+  burst_seconds: 90
+  hard_cut_minutes: 30
+  aba_merge_window_min: 60
+  small_batch_merge: true
+  small_batch_size: 3
+  small_batch_gap_min: 8
+  min_file_size_kb: 30        # 元数据废片预筛：最小文件大小（KB）
+  min_resolution: 400
+  max_aspect_ratio: 3.0
+  print_histogram: true
+  # 重复照片去重（原片 vs 缩小版、跨目录同图）。
+  # 在 phash 计算后、切批前按日分组去重：phash 距离 ≤ 阈值 且 文件名匹配
+  # （同名/包含且后缀以分隔符开头，排除 IMG_1208 vs IMG_1209 这类连拍序号），
+  # 每组保留文件 size 最大者。可消除缩小版重复进 LLM 导致的 T2 暴增和低清误选。
+  dedup_enabled: true
+  dedup_phash_threshold: 2
+  # 注意：当 curator.extraction_level = C（归类档）时，01a 会自动关闭上面三项
+  #   元数据废片预筛（min_file_size_kb / min_resolution / max_aspect_ratio），
+  #   尽量做到一张不落；仅无法读取/无法计算 phash 的损坏文件仍会被排除。
+
+
+# ------------------------------------------------------------
+# 01b：高德反向地理编码
+# ------------------------------------------------------------
+geo:
+  amap_key: "xxxxxx"
+  max_workers: 3              # 个人 key QPS 上限 3
+  qps_limit: 2.5
+  poi_min_score: 35           # 外地 POI 门槛
+  poi_min_score_home: 65      # 家城市门槛（更严）
+
+# ------------------------------------------------------------
+# 02：LLM 精华挑选与事件命名
+# ------------------------------------------------------------
+curator:
+  # ----------------------------------------------------------
+  # 照片提取档位（extraction_level）：控制精华筛选的松紧度
+  #   A = 精华档：只留构图/表情最佳的 1-2 张，提取率约 30%（生产基线 v0.3.0）
+  #   B = 纪念档：只要有记录/纪念意义、非废片就保留，同场景不雷同都留，约 50%-80%
+  #   C = 归类档：不做任何审美剔除，全部照片按事件归档（LLM 只负责命名分组）
+  #       C 档还会在 01a 关闭元数据废片预筛（见 chunker 段说明），尽量一张不落。
+  # ⚠️ 切换档位后必须用 `python run_pipeline.py --fresh` 重跑：
+  #    断点续跑会跳过已完成批次，不切 fresh 则旧结果不会按新档位重评。
+  extraction_level: "A"
+
+  # 各档位对应的提示词文件。留空 prompt_file 时按 extraction_level 自动选择。
+  prompt_files:
+    A: "prompts/prompt_template_v0.3.0.enc"
+    B: "prompts/prompt_template_v0.3.2_memory.enc"
+    C: "prompts/prompt_template_v0.3.1_classify_all.enc"
+  # 显式指定 prompt_file 则优先于按档位自动选择（调试/向后兼容用，平时留空）。
+  # prompt_file: "prompts/prompt_template_v0.3.0.enc"
+
+  # 并发调度模式：
+  #   by_date  (默认)：按天分线程，同一天内串行。事件命名一致性最佳，
+  #                    适合多天多事件场景。一天只有一个线程，不会重复起事件名。
+  #   by_batch ：按批次分线程，同一天的多批也可并发。处理速度更快，
+  #                    适合"单天大量照片"场景。代价：同一天事件命名可能不一致
+  #                    （LLM 看到的事件池是调用时刻的快照，可能落后于其他线程
+  #                    刚加进去的新事件名）。
+  # ⚠️ 切换模式后建议 `python run_pipeline.py --fresh` 重跑：
+  #    parallel_mode 已纳入上下文指纹，切换会自动归档旧进度从头跑，
+  #    避免新旧模式进度混用导致事件命名混乱。
+  # 注：num_workers 在两种模式下含义不同--
+  #    by_date  = 同时处理几天的数据
+  #    by_batch = 同时处理几批的数据
+  parallel_mode: "by_date"
+
+  num_workers: 6
+  # 缩略图最大边长（送 LLM 前缩放到此尺寸）。默认 768：
+  #   调低（<768）会掉识别质量；调大（如 1024）仅略好但多费 token/时间。
+  #   不建议经常改动，GUI 不再暴露此项，如需修改直接编辑此处。
+  max_image_size: 768
+
+  # 进度监控：每隔多少秒在日志中输出一次实时速度与 ETA（预计完成时间）。
+  # 02 运行时间长，此项让日志定时汇报当前吞吐（批/分、张/分）和剩余时间估算。
+  progress_report_interval: 60
+
+  # 模型服务商，取值见下方 provider_configs 的 key
+  provider: "ollama"
+
+  # 各 provider 的连接与模型配置。切服务商只改上面的 provider 字段即可。
+  # 所有 api_key 已脱敏为 xxxxxx，使用前请填入自己的密钥。
+  provider_configs:
+    ollama:
+      base_url: "http://127.0.0.1:11434/v1"
+      api_key: "xxxxxx"
+      model: "gemma4:31b"
+      json_mode: "ollama_format"
+      supports_num_predict: true
+    volcengine:
+      base_url: "https://ark.cn-beijing.volces.com/api/v3"
+      api_key: "xxxxxx"
+      model: "doubao-seed-2-0-lite-260428"
+      json_mode:
+      supports_num_predict: false
+    dashscope:
+      base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      api_key: "xxxxxx"
+      model: "qwen3.7-plus"
+      json_mode: "openai_response_format"
+      supports_num_predict: false
+    kimi:
+      base_url: "https://api.moonshot.cn/v1"
+      api_key: "xxxxxx"
+      model: "kimi-k2.6"
+      json_mode: "openai_response_format"
+      supports_num_predict: false
+    xiaomi_mimo:
+      base_url: "https://api.xiaomimimo.com/v1"
+      api_key: "xxxxxx"
+      model: "mimo-v2.5"
+      json_mode:
+      supports_num_predict: false
+    deepseek:
+      base_url: "https://api.deepseek.com"
+      api_key: "xxxxxx"
+      model: "deepseek-v4-pro"
+      json_mode: "openai_response_format"
+      supports_num_predict: false
+    openai_compatible:
+      base_url: "https://api.openai.com/v1"
+      api_key: "xxxxxx"
+      model: "gpt-4o"
+      json_mode: "openai_response_format"
+      supports_num_predict: false
+    # 本地 New-API 网关（OpenAI 兼容）。作为"本地推理服务"接入时：
+    #   1) 在 api_config.yaml 的 local_providers 列表里加上 "newapi"
+    #   2) 在 api_config.yaml 的 health_check 段加 newapi.url（指向 New-API 根地址）
+    #   3) 下面填入真实 base_url(/v1) / api_key / model（model 名取决于 New-API 后台渠道映射）
+    # New-API 默认端口 3000；开启鉴权后探活会带 Authorization: Bearer <api_key>。
+    newapi:
+      base_url: "http://127.0.0.1:3000/v1"
+      api_key: "xxxxxx"
+      model: "your-model-name"
+      json_mode: "openai_response_format"
+      supports_num_predict: false
+
+
+# ------------------------------------------------------------
+# 03a：日级日报合并（可选后处理阶段）
+# ------------------------------------------------------------
+# 02 输出的事件子文件夹（如 2026-07-19-铁山坪踏青 / 2026-07-19-午餐）
+# 按日期分组后，对当天多事件调 LLM 判断是否该合并 + 生成汇总名，
+# 扁平合并到单一文件夹并写 manifest.json 清单。
+# 默认 enabled: false，与之前行为完全一致；启用后由 run_pipeline.py
+# 在 02 完成后自动接 03a。
+daily_summary:
+  enabled: false
+  # 复用 02 的 provider 配置；留空表示复用 curator.provider
+  provider: ""
+  # 复用 02 的 model；留空表示复用 curator.provider_configs.<provider>.model
+  model: ""
+  # 多日并行合并的线程数
+  num_workers: 6
+  # 当天事件数 > 此值才触发合并判断（1 = >=2 个事件就考虑合并）
+  merge_threshold: 1
+  # 合并后保留 manifest.json 清单（记录原事件分组信息）
+  keep_manifest: true
+  # 03a 专用提示词文件（加密后 .enc）
+  prompt_file: "prompts/prompt_daily_summary.enc"
+  # 进度监控：每隔多少秒输出一次实时速度与 ETA
+  progress_report_interval: 30
+  # -- LLM 调用参数（留空使用代码默认值）--
+  # 单次推理超时（秒）；120s 在高并发下对 31B 模型过短，默认 300s 对齐 stage02 下限
+  llm_timeout: 300.0
+  # 首次调用 max_tokens（合并决策 JSON 通常很短，2048 足够）
+  llm_max_tokens: 2048
+  # 截断重试时的更大上限（qwen3 thinking 有时较长；本地放宽到 8192）
+  llm_max_tokens_retry: 8192
+  # 首次调用温度（0.0 保证 JSON 输出稳定可复现）
+  llm_temperature: 0.0
+  # 真推理超时重试次数（升温重试，不计熔断；假连接故障仍计入熔断不重试）
+  timeout_max_retries: 1
+  # 超时重试时的温度（借鉴 stage02 T2 的 0.1）
+  timeout_retry_temperature: 0.1
+  # 截断重试时的温度：qwen3 在 temperature=0 下偶发 thinking 死循环
+  # （reasoning 重复同一串直到耗尽 token），单纯加大 max_tokens 无法解锁，必须升温打破决定性。
+  # 0.2 为保守值，对分析质量影响极小。
+  truncation_retry_temperature: 0.2
+
+# ------------------------------------------------------------
+# 03b：跨年事件聚合（可选后处理阶段）
+# ------------------------------------------------------------
+# 扫描 02/03a 输出的事件子文件夹，调 LLM 把跨年/跨日的同主题事件
+# 聚类成主题组（如"2023-2025-生日庆祝"），COPY 照片到独立的聚合
+# 输出目录（<target_dir 同级>_跨年聚合），原 TARGET_DIR 完全不动。
+# 默认 enabled: false；启用后由 run_pipeline.py 在 03a 完成后自动接 03b。
+yearly_summary:
+  enabled: false
+  # 复用 02 的 provider 配置；留空表示复用 curator.provider
+  provider: ""
+  # 复用 02 的 model；留空表示复用 curator.provider_configs.<provider>.model
+  model: ""
+  # 输出目录；留空 = <target_dir 同级>_跨年聚合
+  output_dir: ""
+  # 主题组最少事件数（少于则归入未归类）
+  min_events_per_theme: 2
+  # 最小年份跨度（1 = 至少跨 2 个年度才算"跨年"；0 = 同年度也可聚合）
+  min_year_span: 1
+  # LLM 批量分组每批事件数（避免 prompt 超长）
+  batch_size: 100
+  # 聚类阶段多批并行调用线程数（本地 ollama GPU 争抢收益有限，云端 API 可开大）
+  cluster_workers: 6
+  # COPY 阶段并行线程数
+  copy_workers: 3
+  # 保留 manifest.json 清单（主题级 + 全局 yearly_aggregate_manifest.json）
+  keep_manifest: true
+  # 03b 专用提示词文件（加密后 .enc）
+  prompt_file: "prompts/prompt_yearly_summary.enc"
+  # 第二遍主题合并提示词（跨批次语义相同的主题名合并）
+  merge_prompt_file: "prompts/prompt_yearly_summary_merge.enc"
+  # 进度监控：每隔多少秒输出一次实时速度与 ETA
+  progress_report_interval: 30
+  # -- LLM 调用参数（留空使用代码默认值）--
+  # 单次推理超时（秒）
+  llm_timeout: 300.0
+  # 编号化输出后 100 事件/批需 2000-3500 token，4096 首轮即可输出完整不截断
+  llm_max_tokens: 4096
+  # 截断重试时的更大上限（与 03a 处理策略一致，本地放宽到 16384）
+  llm_max_tokens_retry: 16384
+  # 温度（0.0 消除随机性，聚类可复现）
+  llm_temperature: 0.0
+  # 真推理超时重试次数（升温重试，不计熔断）
+  timeout_max_retries: 1
+  # 超时重试时的温度
+  timeout_retry_temperature: 0.1
+  # 截断重试时的温度：qwen3 在 temperature=0 下偶发 thinking 死循环，升温打破决定性。0.2 为保守值。
+  truncation_retry_temperature: 0.2

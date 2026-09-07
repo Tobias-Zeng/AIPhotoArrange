@@ -1,0 +1,17 @@
+{
+  "_comment_format": "GPS 别名模板文件。两种模式：① replace 模式 {name, bbox}：命中后直接用 name 作为地名，跳过高德 API；② block 模式 {block:true, bbox}（无 name）：仍调高德取行政地址，但屏蔽该区域所有 POI。bbox=[lat_min, lng_min, lat_max, lng_max]，WGS-84。_note/_comment_* 字段为注释，程序忽略。",
+  "_comment_usage": "使用方法：① 把本文件复制一份改名为 01b_geo_alias.json（与 exe 同目录）；② 在 areas 数组里按需增删条目；③ 想给某个 Profile 单独配别名，改名为 01b_geo_alias_<profile>.json。程序只读 01b_geo_alias.json / 01b_geo_alias_<profile>.json，本 .template 文件不会被加载，留作模板参考。",
+  "_comment_bbox": "bbox 怎么取：在地图上框出目标区域，取西南角和东北角的坐标 [南纬度, 西经度, 北纬度, 东经度]。可用高德拾取器 https://lbs.amap.com/tools/picker（注意高德返回的是 GCJ-02，需转成 WGS-84 再填）。",
+  "areas": [
+    {
+      "block": true,
+      "bbox": [29.560000, 106.575000, 29.565000, 106.580000],
+      "_note": "示例（block 模式）：屏蔽该区域 POI 误命中（比如公司/住所这类不想被命名的地方）。复制后把 bbox 改成你自己的区域。"
+    },
+    {
+      "name": "重庆洪崖洞",
+      "bbox": [29.560000, 106.580000, 29.565000, 106.585000],
+      "_note": "示例（replace 模式）：命中此 bbox 的照片直接命名为「重庆洪崖洞」，跳过高德 API。复制后改 name 和 bbox。"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+openai>=2.38.0
+pillow>=12.2.0
+requests>=2.34.2
+imagehash>=4.3.2
+pyyaml>=6.0.3
+cryptography>=43.0.0
+
+# GUI 客户端依赖（运行 run_gui.py 需要）
+customtkinter>=5.2.0
+ruamel.yaml>=0.18.0
+
+# 打包专用：Nuitka onefile 压缩依赖（运行时不需要，仅 build_exe.py 用）
+# 不装则 onefile 模式跳过压缩，exe 体积会大 2-3 倍
+zstandard>=0.23.0

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+      明文 HTTP 策略：
+      Android 的 network-security-config 不支持 CIDR/通配 IP 段，无法在此声明
+      “仅私有网段允许明文”。因此真正的把关放在代码层 UrlPolicy（SettingsDialog
+      保存时校验）：release 构建仅允许 https:// 或 A/B/C 类私有地址
+      （10.x / 172.16-31.x / 192.168.x）的 http://，公网 http:// 一律拒绝保存。
+
+      这里保留 cleartextTrafficPermitted="true" 以允许家庭内网直连（不经 Caddy）；
+      公网链路由 UrlPolicy 强制 https。debug 构建同样允许明文，便于本地联调。
+    -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

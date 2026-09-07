@@ -1,0 +1,130 @@
+# ============================================================
+# Homelab API 服务配置模板（脱敏版）
+# ------------------------------------------------------------
+# 独立于 pipeline_config.yaml，不影响 GUI 流程。
+# api_server.py 读取此文件。
+# 
+# 使用方法：
+#   1. 复制此文件为 api_config.yaml
+#   2. 填入你的 ZeroTier IP、认证 Token、存储路径
+#   3. 检查 Ollama 地址和模型名是否正确
+# ============================================================
+
+# 服务监听
+server:
+  # 监听地址（socket 级绑定）。支持两种格式：
+  #   单值（向后兼容）:
+  #     host: "10.x.x.x"          - 仅绑定该网络接口
+  #     host: "0.0.0.0"           - 绑定所有网络接口（含公网，不推荐）
+  #   多值（推荐）:
+  #     hosts:
+  #       - "10.x.x.x"            - ZeroTier 接口
+  #       - "192.168.x.x"         - 局域网接口
+  # 仅在指定接口上创建 socket 监听；未绑定的接口（如公网 IP）无任何响应，连接被直接拒绝。
+  hosts:
+    - "10.x.x.x"         # ZeroTier 接口 IP（改为你的实际 IP）
+    - "192.168.x.x"      # 局域网 IP（改为你的实际 IP）
+  port: 36600
+  auth_token: "your-secret-token-here"  # 认证 Token（手机端设置页填入，建议 32+ 字符随机字符串）
+
+# ZeroTier 配置（已弃用，保留向后兼容）
+zerotier:
+  # ZeroTier 接口 IP。此配置已不再使用，仅作标注
+  interface_ip: "10.x.x.x"
+
+# 临时目录（存放上传的缩略图和流水线中间文件）
+storage:
+  # 基础目录，所有任务数据存于此目录下的 tasks/ 子目录
+  base_dir: "D:/AIPhotoArrange_api"
+  # 任务完成后保留多久（小时），超时自动清理临时缩略图
+  task_retention_hours: 24
+  # 最大并发任务数（同时运行几条流水线）。受本地算力（Ollama/GPU）限制，
+  # 家用建议 1；切云模型 API 后可调大。代码按 N 并发实现，改此值即可放大。
+  max_concurrent_tasks: 1
+  # 等待队列上限。系统总容量 = max_concurrent_tasks + max_queue_size；
+  # 在途任务（uploading/ready/queued/running）达到总容量时，新上传请求
+  # 在首个分块即被拒绝（503 server_busy），不浪费上行流量。
+  max_queue_size: 2
+  # 单个上传分块大小上限（MB），防超大块打爆内存/磁盘
+  max_upload_chunk_mb: 20
+  # 分块总数 sanity 上限（防畸形请求）
+  max_total_chunks: 500
+  # 单任务照片数上限（解压后强制，App 端应同步限制）
+  max_photos: 2000
+  # 解压后总字节上限（防 zip 炸弹），默认 500MB
+  max_unzip_bytes: 524288000
+  # uploading/ready 任务无活动超时（分钟），超时作废并释放名额
+  upload_timeout_min: 30
+
+# 本地推理服务列表
+# ------------------------------------------------------------
+# 列在这里的 provider 走"真实连接探活"（连服务查 /v1/models 或 /api/tags），
+# 未列出的 provider 走"配置校验"（仅校验 base_url/api_key/model 完整性，不发起调用、不计费）。
+# 接入新本地服务（如 New-API 网关）时，把它的 provider key 加到这里即可，无需改代码：
+#   1) 在此列表加上 provider key（如 newapi）
+#   2) 在下方 health_check 段加同名子段并填 url（探活地址）
+#   3) 在 pipeline_config.yaml 的 provider_configs 里加同名段（base_url/api_key/model）
+# 若删除本键或留空，服务回退到内置默认 [ollama, lmstudio, ollama-new]（向后兼容）。
+# 本地服务若开启了 API key（LM Studio 设了 key / New-API 网关），探活会自动带上
+# pipeline_config.yaml 中该 provider 的 api_key 作 Authorization: Bearer，避免 401 误判。
+local_providers:
+  - ollama
+  - lmstudio
+  - ollama-new
+  - newapi
+
+# 流水线配置覆盖（生成临时 pipeline_config 时合并到主配置上）
+pipeline_overrides:
+  chunker:
+    min_file_size_kb: 30       # 保留文件大小预筛（手机端确保缩略图 > 30KB）
+    min_resolution: 400        # 保留分辨率预筛
+    max_aspect_ratio: 3.0      # 保留长宽比预筛
+  curator:
+    extraction_level: "A"      # 精华档（可被请求覆盖）
+    parallel_mode: "by_batch"  # 单天大量照片用 by_batch 更快
+    num_workers: 6
+    # 模型服务商：可填 pipeline_config.yaml 的 provider_configs 中定义的任意 key
+    #   ollama    - 本地 Ollama（默认，走本地健康检查）
+    #   lmstudio  - 本地 LM Studio（走本地健康检查；开了 key 会自动带鉴权探活）
+    #   newapi    - 本地 New-API 网关（同上，需在 local_providers + health_check 各加一段）
+    #   dashscope - 阿里云百炼
+    #   deepseek  - DeepSeek
+    #   kimi      - Moonshot Kimi
+    #   volcengine / xiaomi_mimo / openai 等
+    # 切换在线 provider 时，模型与 api_key 从 pipeline_config.yaml 读取，
+    # 健康检查改为校验配置完整性（不发起真实 API 调用，不计费）。
+    provider: "ollama"
+  # 不跑 03a/03b（远程分析只需删除列表）
+  daily_summary:
+    enabled: false
+  yearly_summary:
+    enabled: false
+
+# 健康检查
+# ------------------------------------------------------------
+# /api/health 端点根据当前生效的 provider（pipeline_overrides.curator.provider）
+# 自动选择检查方式：
+#   - provider == ollama：连 ollama 服务查模型是否加载 + 版本（用下面 ollama 段）
+#   - provider == 在线 API：仅校验 pipeline_config.yaml 中该 provider 的
+#     base_url / api_key / model 是否完整（不发起真实调用，不计费）
+# 使用的模型名统一从 pipeline_config.yaml 的 provider_configs.<provider>.model 读取。
+health_check:
+  # 健康检查超时（秒），仅对本地服务生效
+  timeout: 5
+  # provider == ollama 时使用
+  ollama:
+    url: "http://192.168.x.x:11434"     # Ollama 服务地址（内网 IP:端口）
+    expected_version: "0.30.8"             # 期望的 Ollama 版本（仅记录，不强制）
+  # provider == lmstudio 时使用
+  lmstudio:
+    url: "http://192.168.x.x:21234"     # LM Studio 服务地址
+    expected_version: ""                   # LM Studio 无版本接口，留空
+  # provider == newapi 时使用（本地 New-API 网关，OpenAI 兼容，默认端口 3000）
+  newapi:
+    url: "http://127.0.0.1:3000"        # New-API 服务根地址（探活会请求 {url}/v1/models）
+    expected_version: ""                   # New-API 无版本接口，留空
+
+# 日志
+logging:
+  level: "INFO"
+  file: "logs/api_server.log"

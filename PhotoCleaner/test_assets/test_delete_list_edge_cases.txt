@@ -1,0 +1,13 @@
+IMG_0001.jpg|2456789
+IMG_0002.jpg|3012456
+
+IMG_0005.jpg|1987654
+invalid_line_without_pipe
+IMG_0007.jpg|not_a_number
+IMG_0008.jpg|4123456|extra_field
+  IMG_0010.jpg  |  5234567  
+
+
+IMG 带空格.jpg|6345678
+照片_中文名.jpg|7456789
+Screenshot_20240101-120000.png|8567890

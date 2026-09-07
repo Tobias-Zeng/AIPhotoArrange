@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIPhotoArrange 快速上手 · v2</title>
+<style>
+  :root{
+    --primary:#2563eb; --primary-light:#dbeafe;
+    --success-light:#dcfce7; --warning-light:#fef3c7; --danger-light:#fee2e2;
+    --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --bg-card:#f4f6fb;
+  }
+  *{box-sizing:border-box;}
+  @page{ size:A4 portrait; margin:10mm 11mm; }
+  body{
+    margin:0; padding:10px 12px;
+    font-family:"Microsoft YaHei","PingFang SC","Segoe UI","Segoe UI Emoji","Segoe UI Symbol",system-ui,sans-serif;
+    color:var(--ink); background:#fff; line-height:1.5;
+    font-size:12px; -webkit-font-smoothing:antialiased;
+  }
+  header{
+    background:linear-gradient(90deg,#1d4ed8,#2563eb); color:#fff;
+    padding:9px 14px; border-radius:6px;
+    display:flex; align-items:center; gap:10px; margin-bottom:8px;
+  }
+  header .ic{font-size:22px;}
+  header h1{margin:0; font-size:16px;}
+  header .sub{font-size:10.5px; opacity:.85;}
+  header .ver{
+    margin-left:auto; font-size:10px;
+    border:1px solid rgba(255,255,255,.5); border-radius:999px; padding:2px 10px;
+  }
+  code{
+    font-family:Consolas,monospace; background:var(--bg-card);
+    padding:1px 5px; border-radius:3px; font-size:.88em; color:#be185d;
+  }
+  a{color:#1d4ed8;}
+  h2{
+    font-size:13px; color:var(--primary); margin:8px 0 3px;
+    border-bottom:1.2px solid var(--primary); padding-bottom:2px;
+  }
+  .callout{
+    border-radius:5px; padding:6px 10px; margin:4px 0;
+    border-left:3px solid; font-size:11.5px;
+  }
+  .danger{background:var(--danger-light);border-color:#dc2626;color:#7f1d1d;}
+  .warn{background:var(--warning-light);border-color:#b45309;color:#78350f;}
+  .tip{background:var(--primary-light);border-color:var(--primary);color:#1e3a8a;}
+  ul{margin:3px 0; padding-left:17px;}
+  li{margin:2px 0;}
+  table{border-collapse:collapse; width:100%; margin:3px 0; font-size:11.5px;}
+  th,td{border:1px solid var(--line); padding:3px 7px; text-align:left; vertical-align:top;}
+  th{background:var(--bg-card); font-weight:700;}
+  .badge{display:inline-block; padding:1px 6px; border-radius:999px; font-size:10px; font-weight:700;}
+  .b-blue{background:var(--primary-light);color:#1e3a8a;}
+  .b-green{background:var(--success-light);color:#14532d;}
+  .b-orange{background:var(--warning-light);color:#78350f;}
+  .grid{display:flex; gap:8px; margin:4px 0;}
+  .grid>div{flex:1;}
+  .kbd{
+    display:inline-block; padding:1px 6px; border-radius:3px;
+    background:#f1f5f9; border:1px solid #cbd5e1;
+    font-family:Consolas,monospace; font-size:10.5px; color:#334155;
+  }
+  footer{margin-top:8px; padding-top:5px; border-top:1px solid var(--line);
+    color:var(--muted); font-size:9.5px; text-align:center;}
+  /* 修复 PDF 排版：code/.kbd 内含中文或 emoji 时，Consolas 无字形会回退到 NSimSun
+     （字宽差异导致排版变乱）。显式声明中文字体回退到 YaHei、emoji 回退到
+     Segoe UI Symbol/Emoji，与正文渲染保持一致。 */
+  code, .kbd, pre {
+    font-family: Consolas, "Microsoft YaHei", "Segoe UI Emoji", "Segoe UI Symbol", monospace !important;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="ic">📷</span>
+  <div><h1>AIPhotoArrange 快速上手</h1>
+  <div class="sub">照片智能归档 · 照片指纹切批 -> 高德地理编码 -> 视觉AI大模型筛选与命名</div></div>
+  <span class="ver">v3 · 灰度</span>
+</header>
+
+<h2>1　解压 & 启动</h2>
+<ul>
+  <li>解压 <code>aiphotoarrange.3.x.x.portable.x64.zip</code> 到本地硬盘（<b>不要在 zip 内直接运行，不要放 U 盘</b>）。</li>
+  <li>双击 <code>aiphotoarrange.exe</code> 启动。首次被 SmartScreen 拦截点「更多信息 -> 仍要运行」；杀毒软件误报加白名单即可。</li>
+</ul>
+
+<h2>2　填两个 Key（必填，软件包无 Key 填充为 XXXXXXX）</h2>
+<table>
+  <tr><th style="width:16%">Key</th><th style="width:46%">去哪申请</th><th>填在哪</th></tr>
+  <tr><td><b>高德 Key</b></td><td><a href="https://lbs.amap.com/" target="_blank">高德开放平台</a> 注册个人 Key（免费，够用）</td><td>参数配置「📍 地理位置」-> 高德 Key</td></tr>
+  <tr><td><b>大模型 Key</b></td><td>见第 3 步，二选一</td><td>参数配置「🤖 大模型服务」-> API Key</td></tr>
+</table>
+
+<h2>3　选大模型方案（二选一）</h2>
+<div class="grid">
+  <div class="callout tip">
+    <b>☁️ 在线 qwen3.7-plus（推荐，快）</b><br>
+    服务商 <code>dashscope</code> / 模型 <code>qwen3.7-plus</code>。<a href="https://dashscope.aliyun.com/" target="_blank">阿里云百炼</a> 申请 Key。按量计费，约 2–4 元 / 1000 张。
+  </div>
+  <div class="callout tip">
+    <b>🔒 本地 LM Studio（隐私最佳，免费，推荐本地方案）</b><br>
+    服务商 <code>lmstudio</code> / 模型 <code>qwen/qwen3.8-27b</code>（Q4_K_M）。需显存 ≥ 32G，自装 <a href="https://lmstudio.ai/" target="_blank">LM Studio</a> 并开启本地服务。照片不离开本机，质量优于旧版 gemma4。
+  </div>
+</div>
+<div class="callout danger">
+  <b>⚠ 本地方案硬性约束</b>　  <b>【推荐 LM Studio + qwen3.8-27b】</b>加载 <code>qwen/qwen3.8-27b</code>（Q4_K_M），服务端口设 <code>21234</code>，参数务必设：<b>并发 6</b> · <b>Max Draft = 4</b> · <b>Draft possibility = 0</b> · <b>关闭 Unified KV Cache（必须关！开启会导致同一批照片每次结果不一致）</b>。<br>
+  <b>【旧版 Ollama + gemma4】</b>仍可用：Ollama <b>必须锁 v0.30.8</b>（<a href="https://github.com/ollama/ollama/releases/tag/v0.3.8" target="_blank">下载</a>，tag 写作 v0.3.8），模型 <code>gemma4:31b</code>，但质量与速度均逊于 LM Studio 方案。其它预置服务商未完整测试。
+</div>
+
+<h2>4　填路径 & 参数</h2>
+<table>
+  <tr><th style="width:18%">项</th><th>说明</th><tr>
+  <tr><td><b>源文件夹</b></td><td>待整理原始照片目录，<b>支持多个</b>（点「浏览」逐个添加，每个都递归扫描子目录）</td></tr>
+  <tr><td><b>归档目标</b></td><td>输出目录，<b>不能与源相同或互相包含</b>。软件复制不删原图</td></tr>
+  <tr><td><b>常驻城市</b></td><td>省/市二级下拉。家城市弱化日常地名，外地保留景点全名</td></tr>
+  <tr><td><b>提取档位</b></td><td><span class="badge b-blue">A</span> 精华档 ~20-40% 只要最精彩的 · <span class="badge b-green">B</span> 纪念档 ~40-80% 有意义都留 · <span class="badge b-orange">C</span> 归类档 ~100% 只分类不删</td></tr>
+  <tr><td><b>并发数</b></td><td>默认 6（本地 LM Studio 32G 显存上限；在线模型按服务商 QPS/TPM 限额调整，调大更快但可能被限流）。默认按天分线程，配置文件切 <code>by_batch</code> 则按批分线程。本地推理框架需在其设置中开启并发（LM Studio 设并发 6；Ollama 需<a href="https://github.com/ollama/ollama/blob/main/docs/faq.mdx" target="_blank">开启并行</a>，但注意 Ollama 不支持 qwen 系模型并发）</td></tr>
+</table>
+<div class="callout warn">
+  改完点 <b>「💾 保存配置」</b>。<b>切档位后建议「全新跑 (--fresh)」</b>按新档位全量重评；断点续跑在档位变化时会自动校验 02 进度指纹并作废重跑（旧文件归档不删），但会浪费几分钟重跑 01a/01b，所以切档位优先选全新跑。
+</div>
+
+<h2>5　开跑</h2>
+<ul>
+  <li>底部选运行模式 -> 点 <span class="kbd">▶ 开始一键归档流水线</span>。启动先预检大模型连通性（<code>✅ 推理服务在线</code> 才真正开跑）。运行期间软件自动阻止系统睡眠，晚上挂着跑无需改电源设置。</li>
+  <li><b>全新跑</b>（默认）：从头来过，按当前档位全量重评。<b>第一次跑直接用这个</b>，输出目录非空时自动改名旧目录避免混淆。</li>
+  <li><b>断点续跑</b>：中途被中断后接着跑，配置没变会跳过已完成的阶段直接续上。</li>
+  <li><b>仅合并日报 (03a)</b>：对已跑完 02 的归档目录单独补跑 03a 同日事件合并，无需改配置文件。</li>
+  <li><b>仅跨年聚合 (03b)</b>：对已跑完 02 的归档目录单独跑 03b 跨年主题聚合，把多年同主题事件（如生日庆祝）归到一起，无需改配置文件。</li>
+  <li>中途可 <span class="kbd">⏹ 停止</span>，进度已保存，下次断点续跑接着来。</li>
+</ul>
+
+<h2>6　看结果</h2>
+<ul>
+  <li>结果在归档目标路径下，按 <code>YYYY-MM-DD-事件名</code> 自动建子文件夹，精华照片已复制进去。目录结构示例：<code>2024-05-02-杭州西湖断桥漫游</code> / <code>2024-08-10-洪崖洞夜间漫游</code>。原图不动，AI 命名偶有偏差（如 OCR 错字）直接改文件夹名即可。</li>
+  <li><b>📱 手机端删除列表</b>：处理完成后会在归档目标<b>同级目录</b>生成 <code>non_highlight_photos_*.txt</code>，记录所有非精华照片文件名与大小。通过微信文件传输助手发送到手机，用 PhotoCleaner APP 导入后可一键删除手机相册中的非精华照片，只保留精华。PhotoCleaner 现支持<b>结果本地持久化</b>（误触返回/重启自动恢复预览）与<b>远程分析</b>（手机直传缩略图到自建 PhotoArrangeAPI 服务、原图不出手机），详见《用户操作手册》§8.6。</li>
+  <li>极少数处理失败的照片记在程序目录 <code>02_unprocessed_photos_&lt;Profile&gt;.txt</code>，原图仍在源目录。详细日志在 <code>logs/</code>（01a / 01b / 02 / 03a / 03b 各一份），反馈问题附上。</li>
+</ul>
+
+<div class="callout tip">
+  <b>高级用户</b>：GUI 不能新增 / 改名 Profile 和服务商，需直接编辑 <code>pipeline_config.yaml</code>（结构清晰有注释，空格缩进不用 Tab，改前备份）。新增 Profile 在 <code>profiles:</code> 段复制一段、改 key 和目录即可。<b>Profile 只切换输入/输出目录和中间文件后缀，其余参数（城市、高德 Key、大模型服务、运行参数）全局共享</b>。完整说明见《用户操作手册》。
+</div>
+
+<footer>AIPhotoArrange v3 · 内部灰度测试版 · 详细手册见《用户操作手册》</footer>
+
+</body>
+</html>
