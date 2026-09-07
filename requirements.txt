@@ -9,6 +9,11 @@ cryptography>=43.0.0
 customtkinter>=5.2.0
 ruamel.yaml>=0.18.0
 
+# API 服务依赖（运行 api_server.py / run_api_pipeline.py 需要；仅本地流水线不需要）
+fastapi>=0.115.0
+uvicorn>=0.30.0
+python-multipart>=0.0.9
+
 # 打包专用：Nuitka onefile 压缩依赖（运行时不需要，仅 build_exe.py 用）
 # 不装则 onefile 模式跳过压缩，exe 体积会大 2-3 倍
 zstandard>=0.23.0
