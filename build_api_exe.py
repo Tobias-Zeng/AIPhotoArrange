@@ -136,8 +136,8 @@ def pack_portable_zip(release_dir: Path, base_dir: Path, version: str):
         else:
             print(f"[警告] 便携模板缺少 {name}")
 
-    # 4. 打 zip（文件名带版本号）
-    zip_name = f"PhotoArrangeAPI.{version}.Portable.zip"
+    # 4. 打 zip（文件名带版本号，与 GUI 包风格一致加 .x64 后缀）
+    zip_name = f"PhotoArrangeAPI.{version}.Portable.x64.zip"
     zip_path = release_dir / zip_name
     if zip_path.exists():
         zip_path.unlink()
@@ -226,7 +226,7 @@ def main():
         print("全部完成！")
         print("=" * 60)
         print("\n分发方式:")
-        print(f"  将 release/PhotoArrangeAPI.{version}.Portable.zip 发给用户")
+        print(f"  将 release/PhotoArrangeAPI.{version}.Portable.x64.zip 发给用户")
         print("  用户解压后编辑 api_server.dist/api_config.yaml，右键 install.bat 以管理员身份运行")
         print()
         
