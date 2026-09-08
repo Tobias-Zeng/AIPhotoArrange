@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# pre-commit hook：提交前跑数据脱敏检查
+# 触发方式：git commit 时自动执行；发现 BLOCK 级敏感内容则拒绝提交。
+set -e
+
+SCRIPT="python tools/desensitize_check.py"
+
+# 在仓库根目录下执行
+cd "$(git rev-parse --show-toplevel)"
+
+# 用仓库默认 Python（Windows 下可能是 py 或 python）
+PY=python
+if ! command -v "$PY" >/dev/null 2>&1; then
+  PY=py
+fi
+
+echo "[pre-commit] 运行脱敏检查 / running desensitization check ..."
+if command -v "$PY" >/dev/null 2>&1 && "$PY" tools/desensitize_check.py; then
+  echo "[pre-commit] 通过 / passed."
+  exit 0
+else
+  echo "[pre-commit] 检测到敏感内容，已阻止提交 / blocked."
+  echo "            确认无误可强推: git commit --no-verify  (不推荐)"
+  exit 1
+fi
