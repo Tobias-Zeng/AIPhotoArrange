@@ -404,8 +404,11 @@ def pack_portable_zip(version):
     else:
         print(f"⚠️  未找到 prompts/ 目录：{prompts_src}，跳过")
 
-    # 用户手册 PDF（中文文件名）
-    for manual in ("快速上手.pdf", "用户操作手册.pdf"):
+    # 用户手册 PDF（中文文件名）。
+    # 安全策略：公开发布的便携包只带「快速上手.pdf」，【不打包「用户操作手册.pdf」】——
+    # 该手册含部署拓扑/内网信息，属于不公开文档（见 .gitignore 相应用户操作手册.html）。
+    # 用户操作手册.pdf 仍会留在 release/ 目录本地自用，只是不进分发包。
+    for manual in ("快速上手.pdf",):
         m_src = os.path.join(RELEASE_DIR, manual)
         if os.path.exists(m_src):
             items.append((m_src, manual))
