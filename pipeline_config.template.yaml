@@ -154,6 +154,15 @@ curator:
   # 各 provider 的连接与模型配置。切服务商只改上面的 provider 字段即可。
   # 所有 api_key 已脱敏为 xxxxxx，使用前请填入自己的密钥。
   provider_configs:
+    # 推荐：LM Studio（本地，OpenAI 兼容，支持并发推理）。
+    # 在 LM Studio 的 Local Server 里加载 qwen3.8:27b 并 Start Server。
+    # LM Studio 默认无需鉴权，api_key 可留任意占位值。
+    lmstudio:
+      base_url: "http://127.0.0.1:1234/v1"
+      api_key: "lmstudio"
+      model: "qwen3.8:27b"
+      json_mode: "openai_response_format"
+      supports_num_predict: false
     ollama:
       base_url: "http://127.0.0.1:11434/v1"
       api_key: "xxxxxx"

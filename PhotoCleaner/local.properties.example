@@ -9,7 +9,7 @@
 #   RELEASE_KEY_ALIAS      key 别名
 #   RELEASE_KEY_PASSWORD   key 密码
 #
-# 注意：分发前应轮换签名密钥（旧密码 photocleaner2026 已泄露在 git 历史，视为已失效）。
+# 注意：请使用你自己的 keystore 与密码，切勿把真实凭据提交到版本库。
 
 # sdk.dir=C\:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
 RELEASE_STORE_FILE=photocleaner.keystore

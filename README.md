@@ -1,11 +1,13 @@
-# AIPhotoArrange
+# AIPhotoArrange · AI 家庭照片智能归档 / AI family photo curation
 
-**本地优先的家庭照片智能归档工具** · **Local-first family photo curation**
+**本地优先 · 隐私不出户** · **Local-first · Privacy by design**
+
+让本地视觉大模型从海量家庭照片里挑出真正值得留下的瞬间。自动去重、精华挑选、事件命名，按「日期-事件」归档。电脑上整理全库，手机在外随手清理。
+
+_Let a local vision LLM pick the moments worth keeping from a mountain of family photos. Auto-dedup, highlight selection, event naming, archived by date-event. Curate the whole library on your PC; tidy your phone on the go._
 
 phash 切批 → 高德反向地理编码 → 视觉大模型精华挑选与事件命名 →（可选）日报合并 → 跨年主题聚合。
-照片和推理默认全部在本机完成，隐私不出门。
-
-_pHash batching → Amap reverse-geocoding → vision-LLM highlight curation & event naming → (optional) daily merge → (optional) cross-year theme clustering. Photos and inference stay on your machine by default; nothing leaves your network._
+_pHash batching → Amap reverse-geocoding → vision-LLM highlight curation & event naming → (optional) daily merge → (optional) cross-year theme clustering._
 
 > 🌐 中文在上，English below each section. / Chinese first, English follows in each section.
 
@@ -23,8 +25,8 @@ _pHash batching → Amap reverse-geocoding → vision-LLM highlight curation & e
   _Config-only switching across Ollama, LM Studio, DashScope, Volcengine, Kimi, DeepSeek, a New-API gateway, and more._
 - **桌面 GUI + CLI** — 图形界面一键跑，或命令行精细控制。
   _One-click desktop GUI, or fine-grained CLI._
-- **可选的手机端清理 / Optional mobile cleanup** — 自建 API 服务 + 安卓 App，把"非精华照片"清单同步到手机一键删除。
-  _Optional self-hosted API + Android app to push the "non-highlight" list to your phone for one-tap cleanup._
+- **手机端清理 / Mobile cleanup** — 自建 API 服务 + 安卓 App，手机在外远程分析、把"非精华照片"一键删除，是项目的**重要组成**。
+  _Self-hosted API + Android app: analyze remotely on the go and delete the "non-highlight" photos in one tap — a **core part** of the project._
 
 ---
 
@@ -48,11 +50,23 @@ _pHash batching → Amap reverse-geocoding → vision-LLM highlight curation & e
 
 ## 📦 环境要求 / Requirements
 
-- Python 3.10+
-- **Ollama v0.30.8**（⚠️ 锁定此版本，禁自动更新；v0.30.9 起的 context shift 改动会破坏 vision token）
-  _Pin Ollama to v0.30.8; the context-shift change since v0.30.9 breaks vision tokens._
-- Ollama 模型 / model: `hf.co/unsloth/gemma-4-31B-it-qat-GGUF:UD-Q4_K_XL`（示例，可换 / example, swappable）
-- 显存 / VRAM：≥16G（双卡 16G+16G 可跑 6 并发 / dual 16G runs 6 workers）
+> 💡 **直接用打包好的 GUI exe（见「跑 / Run」）无需本地 Python 环境**；只有从源码运行时才需要装 Python 3.10+。
+> _💡 The prebuilt GUI exe (see "Run") needs **no local Python**; Python 3.10+ is only required when running from source._
+
+- Python 3.10+（源码运行需要 / required to run from source）
+- **推荐：LM Studio + `qwen3.8:27b`** — 首选的本地推理组合。**本项目所有提示词都是针对 `qwen3.8:27b` 调优过的，不建议换其它模型。**
+  _Recommended: LM Studio + `qwen3.8:27b`. **All prompts in this project are tuned for `qwen3.8:27b`; other models are not recommended.**_
+  - 为什么不用 Ollama 跑 Qwen：Ollama 不支持 qwen3.5 架构的**并发推理**，多 worker 会退化为串行，吞吐上不去；LM Studio 可以真正并发，配合本项目的多 worker 明显更快。
+    _Why not Ollama for Qwen: Ollama doesn't support **concurrent inference** for the qwen3.5 architecture (multi-worker degrades to serial), whereas LM Studio runs true concurrency and pairs well with this project's multi-worker curation._
+- **备选：Ollama + `gemma-4-31B`**（`hf.co/unsloth/gemma-4-31B-it-qat-GGUF:UD-Q4_K_XL`）— 提示词同样针对该模型调优过。
+  _Alternative: Ollama + `gemma-4-31B` — prompts are tuned for this model too._
+  - ⚠️ **仅当使用 gemma4 模型时**才需要把 Ollama **锁定在 v0.30.8**（禁自动更新）：v0.30.9 起的 context shift 改动会破坏 gemma4 的 vision token。用 LM Studio + Qwen 则无此限制。
+    _⚠️ **Only when running gemma4** must Ollama be pinned to **v0.30.8** (the context-shift change since v0.30.9 breaks gemma4's vision tokens). This does not apply to the LM Studio + Qwen setup._
+- **无本地显卡也能用：在线模型 / No local GPU? Use an online model** — 没有足够显存跑本地模型时，可直接配置在线服务商。**推荐阿里云百炼 `qwen3.7-plus`**（效果实测；提示词针对它调优过），改 `curator.provider` 为 `dashscope` 并填入 API Key 即可。照片会上传到云端服务商，介意隐私请优先本地方案。
+  _No GPU / not enough VRAM? Configure an online provider instead. **Recommended: Aliyun DashScope `qwen3.7-plus` (verified in testing; prompts tuned for it)** — set `curator.provider` to `dashscope` and add your API key. Note that photos are then uploaded to the cloud provider; prefer local if privacy matters._
+- **模型结论 / Bottom line**：提示词**只为上述三种模型调优过**（`qwen3.8:27b` / `gemma4:31b` / 在线 `qwen3.7-plus`）。**不建议使用其它模型**，效果可能明显下降；如坚持更换，请用自己的验证集重新校准。
+  _Prompts are **only tuned for these three** (`qwen3.8:27b` / `gemma4:31b` / online `qwen3.7-plus`). **Other models are not recommended** — quality may drop noticeably; if you must switch, recalibrate on your own validation set._
+- 显存 / VRAM：≥16G（本地模型 / for local models；双卡 16G+16G 或**单卡 32G** 均可跑 6 并发 / dual 16G **or a single 32G** runs 6 workers）
 - 内存 / RAM：≥8GB（01a phash 并行峰值约 2–3GB / peak ~2–3GB in stage 01a）
 - CPU：01a 阶段吃满所有核心属正常 / stage 01a saturates all cores by design
 - 高德开放平台 Key / Amap key（个人 Key 即可，QPS 3 / personal key, QPS 3 is enough）
@@ -74,13 +88,35 @@ _Core: openai, pillow, requests, imagehash, pyyaml. GUI adds customtkinter, ruam
 
 ### 2. 启动本地推理 / Start local inference
 
+**推荐：LM Studio + Qwen / Recommended: LM Studio + Qwen**
+
+1. 装好 LM Studio，在其中下载 `qwen3.8:27b`（本项目提示词针对它调优，建议就用这个）。
+   _Install LM Studio and download `qwen3.8:27b` (the prompts are tuned for it — recommended)._
+2. 打开 LM Studio 的 **Local Server**（Developer 页），加载该模型并 **Start Server**；默认监听 `http://127.0.0.1:1234/v1`（OpenAI 兼容）。
+   _Open LM Studio's **Local Server** (Developer tab), load the model, and **Start Server**; it serves an OpenAI-compatible API at `http://127.0.0.1:1234/v1` by default._
+3. 建议在 Server 设置里开启**并发/并行请求**，让本项目的多 worker 真正并发。
+   _Enable concurrent/parallel requests in the server settings so this project's multiple workers actually run in parallel._
+
 ```bash
+# 确认可达 / verify reachable
+curl http://127.0.0.1:1234/v1/models
+```
+
+**备选：Ollama + gemma4 / Alternative: Ollama + gemma4**
+
+```bash
+# 开启 Ollama 并行（环境变量）很重要：本项目多 worker 依赖它才能真正并发
+# / Enable Ollama parallelism (env var) — the project's multi-worker relies on it
+set OLLAMA_NUM_PARALLEL=6       # 视显存而定 / depends on VRAM
+
 ollama serve
 ollama pull hf.co/unsloth/gemma-4-31B-it-qat-GGUF:UD-Q4_K_XL
 
 # 确认可达 / verify reachable
 curl http://127.0.0.1:11434/api/tags
 ```
+
+> ⚠️ 用 gemma4 时记得把 Ollama 锁定在 v0.30.8（见上文环境要求）。/ Pin Ollama to v0.30.8 when using gemma4 (see Requirements).
 
 ### 3. 生成配置 / Create your config
 
@@ -106,19 +142,30 @@ geo:
   amap_key: "你的高德 Key"             # Amap key
 curator:
   extraction_level: "A"               # A / B / C
-  provider: "ollama"                  # 切服务商只改这一行 / switch provider here
+  provider: "lmstudio"                # 切服务商改 provider + 对应 provider_configs 的 base_url/api_key/model
   num_workers: 6
 ```
 
+> ⚠️ 切服务商**不只是改 `provider` 一行**：还要在 `curator.provider_configs` 下确认（或填写）该 provider 的 `base_url`（服务地址）、`api_key`（密钥）、`model`（模型名）。模板里这几项已给示例值，用前请改成你自己的。
+> _⚠️ Switching providers is **not only** changing `provider`: you must also check/fill that provider's `base_url`, `api_key`, and `model` under `curator.provider_configs`. The template has example values; change them to yours._
+
+> 用 LM Studio 时把 `provider` 设为 `lmstudio`（`provider_configs.lmstudio.base_url` 默认 `http://127.0.0.1:1234/v1`）；用 Ollama + gemma4 时设为 `ollama`。
+> _Set `provider: lmstudio` for LM Studio (default `http://127.0.0.1:1234/v1`), or `provider: ollama` for the Ollama + gemma4 alternative._
+
 ### 4. 跑 / Run
 
-图形界面（推荐 / recommended）：
+**最简单：打包好的 GUI 可执行文件（推荐）/ Easiest: the prebuilt GUI executable (recommended)**
+
+直接下载 [Releases](../../releases) 里的 `aiphotoarrange.exe`，双击运行，无需装 Python。在界面里填好目录、城市、Key、服务商即可一键归档。
+_Grab `aiphotoarrange.exe` from [Releases](../../releases) and double-click it — no Python needed. Fill in the directories, city, key, and provider in the UI, then run._
+
+**从源码跑图形界面 / From source (GUI):**
 
 ```bash
 python run_gui.py
 ```
 
-命令行一键跑全流程 / one-shot CLI:
+**从源码跑命令行 / From source (CLI):**
 
 ```bash
 python run_pipeline.py            # 断点续跑 / resume
@@ -135,11 +182,14 @@ _Results land in `target_dir`, split into `YYYY-MM-DD-event` folders._
 在 `curator.extraction_level` 一项切换，决定 02 阶段筛得多严：
 _Set `curator.extraction_level` to control how strict stage 02 is:_
 
-| 档位 / Level | 说明 / What | 大致提取率 / Rough rate |
-|:---:|---|:---:|
-| **A** 精华档 / Highlights | 生产基线，严选精华 / strict, keeps only the best | ~30% |
-| **B** 纪念档 / Keepsake | 只剔废片与高度雷同重复帧，有纪念意义就留 / drops only junk & near-duplicates | ~50–80% |
-| **C** 归类档 / Classify-all | 不做审美剔除，全部按事件归档；01a 同时关闭元数据废片预筛，尽量一张不落（仅损坏文件排除）/ no aesthetic culling; also disables 01a metadata pre-filter | ~100% |
+| 档位 / Level | 说明 / What | 大致提取率 / Rough rate | 适合谁 / For whom |
+|:---:|---|:---:|---|
+| **A** 精华档 / Highlights | 只保留真正拿得出手的精华，同类雷同只留 1–2 张 / keeps only truly presentable shots; 1–2 per near-duplicate group | ~20–40% | 只要真正值得留的 / only the keepers |
+| **B** 纪念档 / Keepsake | 有记忆价值的都留，只剔废片与雷同重复帧 / keeps anything memorable, drops only junk & near-duplicates | ~40–80% | 中间派、怕漏 / the middle ground |
+| **C** 归类档 / Classify-all | 一张都不删，全部按事件归档命名；01a 同时关闭元数据废片预筛，尽量一张不落（仅损坏文件排除）/ deletes nothing, names & files everything by event | ~100% | 只想按事件整理、全保留 / archive-all |
+
+> 上面的百分比是**大致范围**，实际落点跟你**照片的重复度**关系很大：同一次拍摄里相似、重复的照片越多，A/B 档剔除的就越多、留下的越少；反之照片彼此独立、不重复，留下的就偏多。所以同一个 A 档，一次活动 50 张可能只留 3–5 张，而一次精心拍摄的活动可能留一半。这属正常现象。
+> _The percentages are **rough ranges**; the real outcome depends heavily on **how repetitive your photos are**. More similar/burst shots in one session → A/B cull more and keep fewer; distinct, non-repetitive photos → more are kept. So the same level A might keep just 3–5 of 50 casual burst shots, yet keep half of a carefully-shot event. This is expected._
 
 各档位自动映射到对应提示词（A=v0.3.0 / B=memory / C=classify_all），由 `curator.prompt_files` 配置。
 _Each level maps to its own prompt via `curator.prompt_files`._
@@ -159,9 +209,9 @@ python extraction_rate_stats.py --json     # JSON 输出 / JSON output
 
 ## 🔌 服务商切换 / Switching providers
 
-推理服务纯配置驱动，改 `curator.provider` 一行即可切换。代码内置多家 OpenAI 兼容服务商，各自的 `base_url` / `api_key` / `model` 在 `curator.provider_configs` 下配置。
+推理服务纯配置驱动。**切服务商要改 `curator.provider` + 该 provider 在 `curator.provider_configs` 下的 `base_url` / `api_key` / `model`**。代码内置多家 OpenAI 兼容服务商。
 
-_Inference is config-driven. Change `curator.provider` to switch. Built-in OpenAI-compatible providers are configured under `curator.provider_configs`._
+_Inference is config-driven. **Switching providers means changing `curator.provider` plus that provider's `base_url` / `api_key` / `model` under `curator.provider_configs`.** Built-in OpenAI-compatible providers are configured there._
 
 内置可选项 / built-in options：`ollama`、`lmstudio`、`dashscope`（阿里百炼）、`volcengine`（火山）、`kimi`、`xiaomi_mimo`、`deepseek`、`openai_compatible`、`newapi`（本地 New-API 网关 / local gateway）。
 
@@ -172,11 +222,11 @@ curator:
     dashscope:
       base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
       api_key: "你的 key / your key"
-      model: "qwen3.7-plus"    # ⚠️ 以下模型名均为示例，请按你实际部署填写
+      model: "qwen3.7-plus"    # ⚠️ 模型名为示例，请按你实际部署填写
 ```
 
-> ⚠️ **模板中所有 `model` 字段都是示例占位值**（如 `gemma4:31b`、`qwen3.7-plus`、`doubao-*`、`kimi-*` 等），**请按你实际部署的模型名填写**。提示词是按 31B 级视觉模型调过的，换模型建议用自己的验证集重新校准。
-> _All `model` values in the template are placeholders. Fill in the model names you actually deploy. Prompts were tuned for a 31B-class vision model; recalibrate on your own validation set if you switch._
+> ⚠️ **模板中所有 `model` 字段都是示例占位值**（如 `gemma4:31b`、`qwen3.7-plus` 等），**请按你实际部署的模型名填写**。提示词只针对 `qwen3.8:27b` / `gemma4:31b` / 在线 `qwen3.7-plus` 调优过，换成其它模型效果可能下降，请用自己的验证集重新校准。
+> _All `model` values in the template are placeholders. Fill in the model names you actually deploy. Prompts are tuned only for `qwen3.8:27b` / `gemma4:31b` / online `qwen3.7-plus`; other models may degrade — recalibrate on your own validation set if you switch._
 
 `run_pipeline.py` 在跑 02/03a/03b 前会**预检**所选服务商（连通性 + 目标模型是否存在），不可达就立即报错退出。想跳过加 `--skip-preflight`。
 _Before stages 02/03a/03b, `run_pipeline.py` preflights the selected provider (reachability + model presence) and aborts if unreachable. Skip with `--skip-preflight`._
@@ -237,11 +287,11 @@ _Change the top-level `profile:`, or pass `--profile`. A profile can also overri
 
 ---
 
-## 📱 可选：远程分析与手机端清理 / Optional: remote analysis & mobile cleanup
+## 📱 远程分析与手机端清理 / Remote analysis & mobile cleanup
 
-除了本地跑，项目还带一套**自建**的远程分析子系统，让手机相册也能用上同一套归档能力——**原图不出手机、服务由你自己掌控**。
+这是项目的**重要组成**：一套**自建**的远程分析子系统，让手机相册在外也能用上同一套归档能力——**原图不出手机、服务由你自己掌控**。
 
-_Beyond local runs, the project ships a **self-hosted** remote-analysis subsystem so your phone gallery can use the same curation — **originals never leave the phone, and you run the server yourself.**_
+_This is a **core part** of the project: a **self-hosted** remote-analysis subsystem so your phone gallery can use the same curation on the go — **originals never leave the phone, and you run the server yourself.**_
 
 **它由两部分组成 / Two parts:**
 
@@ -269,18 +319,6 @@ _See [`PhotoCleaner/README.md`](./PhotoCleaner/README.md) for building the Andro
 
 ---
 
-## 🖥️ 桌面 GUI / Desktop GUI
-
-```bash
-python run_gui.py
-```
-
-GUI 自动读取 `pipeline_config.yaml` 并把当前值填进表单（源/目标目录、常驻城市、各 Key、Profile、Provider、提取档位等）。改完点"保存"写回 YAML，点"开始一键归档流水线"即在后台线程跑 `run_pipeline.py`，实时日志同步显示、界面不卡死。运行结束若有 `[WARNING]`/`[ERROR]` 会高亮点名是哪个阶段、共几条。
-
-_The GUI loads `pipeline_config.yaml` into a form (directories, home city, keys, profile, provider, extraction level, …). Save writes back to YAML; the run button launches `run_pipeline.py` on a background thread with a live log pane. Any `[WARNING]`/`[ERROR]` is surfaced with the stage name and count when the run ends._
-
----
-
 ## 📦 打包 / Packaging (Nuitka)
 
 项目有两个独立的打包入口，产出两个 exe：
@@ -300,8 +338,8 @@ _Builds generate config from the **sanitized templates** (keys as `xxxxxx`); onl
 
 ## 🔐 提示词加密 / Prompt encryption
 
-明文提示词放 `prompts/*.txt`（**开源公开**），运行/发布只读加密版 `prompts/*.enc`。改完提示词后重新加密：
-_Plaintext prompts live in `prompts/*.txt` (**open-sourced**); runtime/release read the encrypted `prompts/*.enc`. Re-encrypt after edits:_
+明文提示词放 `prompts/*.txt`（**开源公开**），运行/发布也读 `.enc` 加密版。`.enc` 加密**只是为了防止提示词被误改**，并非保密措施；改完提示词后重新加密同步：
+_Plaintext prompts live in `prompts/*.txt` (**open-sourced**); runtime/release also read the `.enc` versions. The `.enc` encryption is **only to prevent accidental edits**, not secrecy; re-encrypt after editing to keep them in sync._
 
 ```bash
 python encrypt_prompt.py    # 把 prompts/*.txt 全部重新生成为 *.enc
@@ -320,26 +358,6 @@ _Decryption happens automatically in `_load_prompt_text()` using a fixed built-i
   _Stage 02 resumes from `02_progress_<profile>.json`._
 - `--fresh` 把当前 profile 的批次/进度/清单归档到 `_pipeline_archive/<profile>_<时间戳>/`（不删除），跨用户共享的 `01b_amap_cache.json` 永远保留。若输出目录已存在且非空，会自动改名移走再重建，避免新旧混淆。
   _`--fresh` archives (never deletes) per-profile intermediates into `_pipeline_archive/`, keeps the shared `01b_amap_cache.json`, and renames a non-empty existing output dir before recreating it._
-
----
-
-## ❓ 常见问题 / FAQ
-
-**Q：02 卡住、HTTP 不返回 / Stage 02 hangs, HTTP never returns**
-A：Ollama 挂了或长跑后熔断。Ctrl+C，重启 Ollama，重跑 02（自动续跑）。
-_Ollama died or tripped the circuit breaker. Ctrl+C, restart Ollama, re-run 02 (it resumes)._
-
-**Q：命名出现"图像损坏""严重失真"剔除理由 / Odd "corrupted/distorted" rejections**
-A：Ollama 版本不对。必须用 v0.30.8，v0.30.9 起的 context shift 改动会破坏 vision token。
-_Wrong Ollama version. Use v0.30.8; the context-shift change since v0.30.9 breaks vision tokens._
-
-**Q：高德返回 10021 限流 / Amap 10021 rate limit**
-A：01b 已内置退避重试，通常自动恢复；持续报错检查 Key 是否被封或并发调太高。
-_01b backs off and retries automatically; if it persists, check the key or lower concurrency._
-
-**Q：想换模型 / Want a different model**
-A：改 `curator.provider_configs` 里对应的 `model`；提示词是按 31B 级视觉模型调的，换模型建议用自己的验证集重新校准。
-_Change the `model` under `curator.provider_configs`; recalibrate on your own validation set._
 
 ---
 
