@@ -49,29 +49,38 @@ echo Install Dir:   %INSTALL_DIR%
 echo Executable:    %API_EXE%
 echo.
 
+REM [Step 0] Detect current state (idempotent). Prompt for password only
+REM   when a new account must be created or a fresh service must be bound.
+set "NEED_USER=0"
+set "NEED_SVC=0"
+net user %SVC_ACCOUNT% >nul 2>&1
+if errorlevel 1 set "NEED_USER=1"
+sc query %SERVICE_NAME% >nul 2>&1
+if errorlevel 1 set "NEED_SVC=1"
+
 set "SVC_PASS="
+if "%NEED_USER%%NEED_SVC%"=="00" goto :skip_password
 set /p "SVC_PASS=Enter password for %SVC_ACCOUNT%: "
 if "%SVC_PASS%"=="" (
     echo [ERROR] Password cannot be empty.
     pause
     exit /b 1
 )
+goto :after_password
+:skip_password
+echo [Step 0] Account and service already exist - updating binaries/ACL only ^(no password needed^).
+:after_password
 
-sc query %SERVICE_NAME% >nul 2>&1
-if %errorLevel% equ 0 (
-    echo [Step 1] Existing service found, stopping and removing...
+if "%NEED_SVC%"=="0" (
+    echo [Step 1] Existing service found, stopping to update binaries...
     net stop %SERVICE_NAME% >nul 2>&1
-    if exist "%NSSM_EXE%" (
-        "%NSSM_EXE%" remove %SERVICE_NAME% confirm >nul 2>&1
-    ) else (
-        "%SRC_NSSM%" remove %SERVICE_NAME% confirm >nul 2>&1
-    )
     timeout /t 2 /nobreak >nul
+) else (
+    echo [Step 1] No existing service.
 )
 
 echo [Step 2] Ensuring service account %SVC_ACCOUNT% exists...
-net user %SVC_ACCOUNT% >nul 2>&1
-if %errorLevel% neq 0 (
+if "%NEED_USER%"=="1" (
     net user %SVC_ACCOUNT% "%SVC_PASS%" /add /passwordchg:no /y >nul
     if errorlevel 1 (
         echo [ERROR] Failed to create local account %SVC_ACCOUNT%.
@@ -81,8 +90,7 @@ if %errorLevel% neq 0 (
     wmic useraccount where "Name='%SVC_ACCOUNT%'" set PasswordExpires=FALSE >nul 2>&1
     echo   Account %SVC_ACCOUNT% created.
 ) else (
-    net user %SVC_ACCOUNT% "%SVC_PASS%" >nul
-    echo   Account %SVC_ACCOUNT% already exists (password updated).
+    echo   Account %SVC_ACCOUNT% already exists ^(left unchanged^).
 )
 
 echo [Step 3] Copying binaries to %INSTALL_DIR% ...
@@ -98,8 +106,11 @@ copy /Y "%SRC_NSSM%" "%INSTALL_DIR%\nssm.exe" >nul
 echo [Step 4] Hardening install directory ACL...
 icacls "%INSTALL_DIR%" /inheritance:r >nul
 icacls "%INSTALL_DIR%" /grant:r "SYSTEM:(OI)(CI)F" "Administrators:(OI)(CI)F" "%SVC_ACCOUNT%:(OI)(CI)RX" >nul
+REM Pipeline writes intermediate files (phash cache/batches/progress) + logs
+REM into the working dir -> loosen api_server.dist to Modify for the service.
+if not exist "%WORK_DIR%" mkdir "%WORK_DIR%"
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
-icacls "%LOG_DIR%" /grant:r "%SVC_ACCOUNT%:(OI)(CI)M" >nul
+icacls "%WORK_DIR%" /grant:r "%SVC_ACCOUNT%:(OI)(CI)M" >nul
 
 echo [Step 5] Preparing task data directory ACL...
 set "TASK_BASE_DIR=D:\AIPhotoArrange_api"
@@ -111,12 +122,16 @@ if exist "%TASK_BASE_DIR%" (
     echo   [WARN] Could not create %TASK_BASE_DIR%; adjust api_config.yaml and ACL manually.
 )
 
-echo [Step 6] Installing service under %SVC_ACCOUNT% ...
-"%NSSM_EXE%" install %SERVICE_NAME% "%API_EXE%"
-if %errorLevel% neq 0 (
-    echo [ERROR] Service install failed
-    pause
-    exit /b 1
+if "%NEED_SVC%"=="1" (
+    echo [Step 6] Installing service under %SVC_ACCOUNT% ...
+    "%NSSM_EXE%" install %SERVICE_NAME% "%API_EXE%"
+    if errorlevel 1 (
+        echo [ERROR] Service install failed
+        pause
+        exit /b 1
+    )
+) else (
+    echo [Step 6] Service already exists - refreshing parameters ^(binding preserved^)...
 )
 
 "%NSSM_EXE%" set %SERVICE_NAME% AppDirectory "%WORK_DIR%"
@@ -127,11 +142,14 @@ if %errorLevel% neq 0 (
 "%NSSM_EXE%" set %SERVICE_NAME% AppStderr "%LOG_DIR%\api_service_stderr.log"
 "%NSSM_EXE%" set %SERVICE_NAME% AppExit Default Restart
 "%NSSM_EXE%" set %SERVICE_NAME% AppRestartDelay 5000
-"%NSSM_EXE%" set %SERVICE_NAME% ObjectName ".\%SVC_ACCOUNT%" "%SVC_PASS%"
-if errorlevel 1 (
-    echo [ERROR] Failed to bind service to account %SVC_ACCOUNT%.
-    pause
-    exit /b 1
+
+if "%NEED_SVC%"=="1" (
+    "%NSSM_EXE%" set %SERVICE_NAME% ObjectName ".\%SVC_ACCOUNT%" "%SVC_PASS%"
+    if errorlevel 1 (
+        echo [ERROR] Failed to bind service to account %SVC_ACCOUNT%.
+        pause
+        exit /b 1
+    )
 )
 
 set "SVC_PASS="

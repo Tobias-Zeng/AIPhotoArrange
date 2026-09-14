@@ -51,43 +51,61 @@ if not exist "%SRC_DIR%api_server.dist\PhotoArrangeAPI.exe" (
 )
 
 REM ------------------------------------------------------------------
-REM [Step 0] Prompt for service account password (never persisted)
-REM   Interactive input only; do not log/echo the password.
+REM [Step 0] Detect current state (idempotent install)
+REM   NEED_USER=1  -> account missing, must be created (password required)
+REM   NEED_SVC=1   -> service missing, must be installed (password required
+REM                   only if we also need to (re)bind the account)
+REM   A password is prompted ONLY when a new account must be created OR a
+REM   fresh service install must bind the account. Re-running to update
+REM   binaries/ACL on an existing account+service asks for nothing.
 REM ------------------------------------------------------------------
+set "NEED_USER=0"
+set "NEED_SVC=0"
+net user %SVC_ACCOUNT% >nul 2>&1
+if errorlevel 1 set "NEED_USER=1"
+sc query %SERVICE_NAME% >nul 2>&1
+if errorlevel 1 set "NEED_SVC=1"
+
+set "SVC_PASS="
+if "%NEED_USER%%NEED_SVC%"=="00" goto :skip_password
+
 echo [Step 0] Configure service account password
-echo   The service will run under a dedicated low-privilege account: %SVC_ACCOUNT%
+echo   The service runs under a dedicated low-privilege account: %SVC_ACCOUNT%
 echo   Choose a strong password (min 12 chars, mix upper/lower/digit/symbol).
 echo   The password is NOT saved to disk.
 echo.
-set "SVC_PASS="
 set /p "SVC_PASS=Enter password for %SVC_ACCOUNT%: "
 if "%SVC_PASS%"=="" (
     echo [ERROR] Password cannot be empty.
     pause
     exit /b 1
 )
+goto :after_password
+
+:skip_password
+echo [Step 0] Account and service already exist - updating binaries/ACL only.
+echo   No password needed (existing account/service binding is preserved).
+:after_password
 
 REM ------------------------------------------------------------------
-REM [Step 1] Stop and remove old service if present
+REM [Step 1] Stop existing service if present (to unlock binaries).
+REM   Do NOT remove the service - keep it idempotent. Removal is the
+REM   uninstaller's job.
 REM ------------------------------------------------------------------
-sc query %SERVICE_NAME% >nul 2>&1
-if %errorLevel% equ 0 (
-    echo [Step 1] Existing service found, stopping and removing...
+if "%NEED_SVC%"=="0" (
+    echo [Step 1] Existing service found, stopping to update binaries...
     net stop %SERVICE_NAME% >nul 2>&1
-    if exist "%NSSM_EXE%" (
-        "%NSSM_EXE%" remove %SERVICE_NAME% confirm >nul 2>&1
-    ) else if exist "%SRC_DIR%nssm.exe" (
-        "%SRC_DIR%nssm.exe" remove %SERVICE_NAME% confirm >nul 2>&1
-    )
     timeout /t 2 /nobreak >nul
+) else (
+    echo [Step 1] No existing service.
 )
 
 REM ------------------------------------------------------------------
-REM [Step 2] Create service account if missing
+REM [Step 2] Create service account only if missing (never touch an
+REM   existing account's password).
 REM ------------------------------------------------------------------
 echo [Step 2] Ensuring service account %SVC_ACCOUNT% exists...
-net user %SVC_ACCOUNT% >nul 2>&1
-if %errorLevel% neq 0 (
+if "%NEED_USER%"=="1" (
     net user %SVC_ACCOUNT% "%SVC_PASS%" /add /passwordchg:no /y >nul
     if errorlevel 1 (
         echo [ERROR] Failed to create local account %SVC_ACCOUNT%.
@@ -99,9 +117,7 @@ if %errorLevel% neq 0 (
     wmic useraccount where "Name='%SVC_ACCOUNT%'" set PasswordExpires=FALSE >nul 2>&1
     echo   Account %SVC_ACCOUNT% created.
 ) else (
-    REM Update password to what was just entered (idempotent reinstall)
-    net user %SVC_ACCOUNT% "%SVC_PASS%" >nul
-    echo   Account %SVC_ACCOUNT% already exists (password updated).
+    echo   Account %SVC_ACCOUNT% already exists ^(left unchanged^).
 )
 
 REM Deny interactive/remote logon (best-effort; ignore failures)
@@ -123,18 +139,24 @@ copy /Y "%SRC_DIR%nssm.exe" "%INSTALL_DIR%\nssm.exe" >nul
 copy /Y "%SRC_DIR%uninstall.bat" "%INSTALL_DIR%\uninstall.bat" >nul 2>&1
 
 REM ------------------------------------------------------------------
-REM [Step 4] Harden ACLs on install dir
-REM   - Remove inherited permissions
-REM   - Grant SYSTEM + Administrators full control
-REM   - Grant service account read+execute only (no write to binaries)
+REM [Step 4] Harden ACLs on install dir (least-privilege)
+REM   - Remove inherited permissions on the install root
+REM   - Grant SYSTEM + Administrators full control everywhere
+REM   - Root %INSTALL_DIR% stays read+execute for the service account
+REM     (protects nssm.exe / uninstall.bat from tampering)
+REM   - The pipeline writes intermediate files (phash cache, batches,
+REM     progress, logs) into %WORK_DIR% (api_server.dist), so that dir
+REM     alone is loosened to Modify for the service account.
 REM ------------------------------------------------------------------
 echo [Step 4] Hardening install directory ACL...
 icacls "%INSTALL_DIR%" /inheritance:r >nul
 icacls "%INSTALL_DIR%" /grant:r "SYSTEM:(OI)(CI)F" "Administrators:(OI)(CI)F" "%SVC_ACCOUNT%:(OI)(CI)RX" >nul
 
-REM Service must write logs -> loosen just the logs dir
+REM Service must write pipeline intermediate files + logs -> loosen the
+REM working dir (api_server.dist). This covers logs\ as a subtree too.
+if not exist "%WORK_DIR%" mkdir "%WORK_DIR%"
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
-icacls "%LOG_DIR%" /grant:r "%SVC_ACCOUNT%:(OI)(CI)M" >nul
+icacls "%WORK_DIR%" /grant:r "%SVC_ACCOUNT%:(OI)(CI)M" >nul
 
 REM ------------------------------------------------------------------
 REM [Step 5] Grant service account write access to task data dir
@@ -154,14 +176,21 @@ if exist "%TASK_BASE_DIR%" (
 )
 
 REM ------------------------------------------------------------------
-REM [Step 6] Install service via NSSM under low-privilege account
+REM [Step 6] Install service via NSSM (only when missing).
+REM   If the service already exists, we do NOT reinstall or rebind the
+REM   account - the existing binding/password is preserved. We only
+REM   refresh the non-credential parameters so binary path changes apply.
 REM ------------------------------------------------------------------
-echo [Step 6] Installing service under %SVC_ACCOUNT% ...
-"%NSSM_EXE%" install %SERVICE_NAME% "%API_EXE%"
-if %errorLevel% neq 0 (
-    echo [ERROR] Service install failed
-    pause
-    exit /b 1
+if "%NEED_SVC%"=="1" (
+    echo [Step 6] Installing service under %SVC_ACCOUNT% ...
+    "%NSSM_EXE%" install %SERVICE_NAME% "%API_EXE%"
+    if errorlevel 1 (
+        echo [ERROR] Service install failed
+        pause
+        exit /b 1
+    )
+) else (
+    echo [Step 6] Service already exists - refreshing parameters ^(binding preserved^)...
 )
 
 "%NSSM_EXE%" set %SERVICE_NAME% AppDirectory "%WORK_DIR%"
@@ -172,12 +201,15 @@ if %errorLevel% neq 0 (
 "%NSSM_EXE%" set %SERVICE_NAME% AppStderr "%LOG_DIR%\api_service_stderr.log"
 "%NSSM_EXE%" set %SERVICE_NAME% AppExit Default Restart
 "%NSSM_EXE%" set %SERVICE_NAME% AppRestartDelay 5000
-"%NSSM_EXE%" set %SERVICE_NAME% ObjectName ".\%SVC_ACCOUNT%" "%SVC_PASS%"
-if errorlevel 1 (
-    echo [ERROR] Failed to bind service to account %SVC_ACCOUNT%.
-    echo   Check that the password meets policy and the account is not locked.
-    pause
-    exit /b 1
+
+if "%NEED_SVC%"=="1" (
+    "%NSSM_EXE%" set %SERVICE_NAME% ObjectName ".\%SVC_ACCOUNT%" "%SVC_PASS%"
+    if errorlevel 1 (
+        echo [ERROR] Failed to bind service to account %SVC_ACCOUNT%.
+        echo   Check that the password meets policy and the account is not locked.
+        pause
+        exit /b 1
+    )
 )
 
 REM Clear password variable from memory
