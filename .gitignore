@@ -75,4 +75,8 @@ PhotoCleaner/TESTING_GUIDE.md
 # 测试目录（依赖私有模型服务，含内网地址，对公开用户无法直接运行），本地保留
 test/
 
+# opencode agent skills（本地工具配置，含 .agents/skills/byted-web-search/.env 凭证），不纳入版本管理
+.agents/
+skills-lock.json
+
 
