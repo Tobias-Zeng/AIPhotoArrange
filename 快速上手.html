@@ -106,7 +106,7 @@
   </div>
 </div>
 <div class="callout danger">
-  <b>⚠ 本地方案硬性约束</b>　  <b>【推荐 LM Studio + qwen3.8-27b】</b>加载 <code>qwen/qwen3.8-27b</code>（Q4_K_M），服务端口设 <code>21234</code>，参数务必设：<b>并发 6</b> · <b>Max Draft = 4</b> · <b>Draft possibility = 0</b> · <b>关闭 Unified KV Cache（必须关！开启会导致同一批照片每次结果不一致）</b>。<br>
+  <b>⚠ 本地方案硬性约束</b>　 <b>【推荐 LM Studio + qwen3.8-27b】</b>加载 <code>qwen/qwen3.8-27b</code>（Q4_K_M），参数务必设：<b>并发 6</b> · <b>Max Draft = 4</b> · <b>Draft possibility = 0</b> · <b>关闭 Unified KV Cache（必须关！开启会导致同一批照片每次结果不一致）</b>。服务地址默认 <code>http://127.0.0.1:1234/v1</code>（LM Studio 默认端口），改过端口或用局域网推理机时，把 GUI「服务地址」改成实际值；模型名以 LM Studio 界面实际显示的 ID 为准。<br>
   <b>【旧版 Ollama + gemma4】</b>仍可用：Ollama <b>必须锁 v0.30.8</b>（<a href="https://github.com/ollama/ollama/releases/tag/v0.3.8" target="_blank">下载</a>，tag 写作 v0.3.8），模型 <code>gemma4:31b</code>，但质量与速度均逊于 LM Studio 方案。其它预置服务商未完整测试。
 </div>
 
@@ -144,7 +144,7 @@
   <b>高级用户</b>：GUI 不能新增 / 改名 Profile 和服务商，需直接编辑 <code>pipeline_config.yaml</code>（结构清晰有注释，空格缩进不用 Tab，改前备份）。新增 Profile 在 <code>profiles:</code> 段复制一段、改 key 和目录即可。<b>Profile 只切换输入/输出目录和中间文件后缀，其余参数（城市、高德 Key、大模型服务、运行参数）全局共享</b>。完整说明见《用户操作手册》。
 </div>
 
-<footer>AIPhotoArrange v3 · 内部灰度测试版 · 详细手册见《用户操作手册》</footer>
+<footer>AIPhotoArrange v3 · 内部灰度测试版 · 详细手册（《用户操作手册》）不随包分发，请向分发者索取</footer>
 
 </body>
 </html>
