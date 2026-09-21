@@ -6,7 +6,7 @@
 
 ## 📱 项目简介 / Overview
 
-PhotoCleaner 是 AIPhotoArrange 的安卓端伴侣 APP。它的**主打能力是远程分析**：手机相册的照片**缩略图**直传到你自建的 PhotoArrangeAPI 服务，在你自己的机器上跑同一套 AI 精华挑选流水线，拿回"该删哪些"的清单后一键删除到系统回收站——**原图始终不出手机**。这样无需先把照片导到电脑，手机相册就能就地瘦身、只留精华。
+PhotoCleaner 是 AIPhotoArrange 的安卓端伴侣 APP。它的**主打能力是远程分析**：手机相册的照片**缩略图**直传到你自建的 PhotoArrangeAPI 服务，在你自己的机器上跑同一套 AI 精华挑选流水线，拿回"该删哪些"的清单后一键删除（删除后可在系统/相册「最近删除」中恢复）——**原图始终不出手机**。这样无需先把照片导到电脑，手机相册就能就地瘦身、只留精华。
 
 _PhotoCleaner is the Android companion to AIPhotoArrange. **Its primary feature is remote analysis**: the app uploads gallery **thumbnails** directly to your self-hosted PhotoArrangeAPI, which runs the same AI curation pipeline on your own machine and returns the "what to delete" list — **originals never leave the phone**. No need to copy photos to a PC first; you clean the gallery in place and keep only the highlights._
 
@@ -37,7 +37,7 @@ _If you've already run the PC pipeline, you can also send the generated `non_hig
 
 - **远程分析（主功能）**：缩略图直传自建 PhotoArrangeAPI，原图不出手机，结果本地持久化 / **remote analysis (primary)**: upload thumbnails to your self-hosted API, originals stay on-device, results persist locally
 - 缩略图网格预览待删除照片 / grid thumbnail preview of deletion candidates
-- 批量删除到系统回收站（Android 11+ 30 天内可恢复）/ batch delete to trash (recoverable for 30 days)
+- 批量删除（Android 11+，删除后可在系统/相册「最近删除」中恢复 30 天）/ batch delete (Android 11+; recoverable from system/gallery "Recently deleted" for 30 days)
 - 相册照片匹配（文件名 + 大小双重匹配，±1KB 容差，防误删）/ gallery matching by filename + size (±1KB)
 - **附加**：导入 PC 端删除清单（`non_highlight_photos_*.txt`）本地删除 / **secondary**: import the PC-side delete list for offline deletion
 
@@ -45,7 +45,7 @@ _If you've already run the PC pipeline, you can also send the generated `non_hig
 
 - **远程分析优先**：无需先把照片导到电脑，手机就地完成分析与清理 / remote-analysis first: clean in place without copying to a PC
 - **隐私**：只上传缩略图，原图不出手机；服务仅内网、拦截明文公网地址 / privacy: only thumbnails leave the device; server is LAN-only
-- **安全**：移到回收站可恢复；文件名+大小双重匹配防误删 / safe: recoverable trash + dual-key matching
+- **安全**：删除后可从系统/相册「最近删除」恢复；文件名+大小双重匹配防误删 / safe: recoverable from system/gallery "Recently deleted" + dual-key matching
 - **轻量**：APK < 5MB / lightweight APK
 
 ## ⚙️ 技术栈 / Tech stack
@@ -60,10 +60,10 @@ _If you've already run the PC pipeline, you can also send the generated `non_hig
 | 网络（远程分析）/ Networking | OkHttp | 4.12.0 |
 | JSON | org.json | 20231013 |
 | 加密存储（服务地址/token）/ Encrypted storage | androidx.security-crypto | 1.1.0-alpha06 |
-| 删除 API / Delete API | MediaStore.createTrashRequest | API 30+ |
+| 删除 API / Delete API | MediaStore.createDeleteRequest | API 30+ |
 
-**系统要求 / Requirements：** minSdk 30（Android 11）· targetSdk 34（Android 14）。回收站 `createTrashRequest` 需要 API 30+。
-_minSdk 30 / targetSdk 34; the trash API requires API 30+._
+**系统要求 / Requirements：** minSdk 30（Android 11）· targetSdk 34（Android 14）。批量删除 `createDeleteRequest` 需要 API 30+。
+_minSdk 30 / targetSdk 34; the batch-delete API requires API 30+._
 
 ## 🏗️ 项目结构 / Project layout
 
@@ -110,14 +110,13 @@ _`RemoteAnalysisManager` orchestrates the flow; `ThumbnailGenerator` builds thum
 
 ### PhotoDeleter — 删除执行 / deletion
 
-用 `MediaStore.createTrashRequest` 批量移到系统回收站（30 天内可恢复）。用户在系统弹窗确认后由系统执行删除，App 无需持有敏感删除权限。
-_Uses `MediaStore.createTrashRequest` to move photos to the system trash (recoverable for 30 days). The system performs the deletion after a user consent dialog._
+用 `MediaStore.createDeleteRequest` 发起批量删除。早期的 `createTrashRequest` 在 MIUI 等定制系统上可能出现「原图已移走但相册仍显示、且不进最近删除」的问题，因此改用兼容性更好的删除请求；用户在系统弹窗确认后由系统执行，删除后的照片可在系统/相册「最近删除」中恢复 30 天，App 无需持有敏感删除权限。
+_Uses `MediaStore.createDeleteRequest` for batch deletion. The earlier `createTrashRequest` could leave photos visible in customized gallery apps such as MIUI even after MediaStore moved them, so the app now uses the more compatible delete request. The system performs deletion after user consent, and deleted photos remain recoverable from system/gallery "Recently deleted" for 30 days._
 
 ### PhotoMatcher — 照片匹配（附加）/ matching (secondary)
 
 导入清单模式使用：解析删除清单（`文件名|大小` 格式），扫描相册（MediaStore 查询），按文件名 + 大小双重匹配（±1KB 容差）。双重匹配用于防止误删：相机序号重置、换机文件名重置、跨年同名文件等场景下，单靠文件名会误伤。
 _Used by the import-list mode: parses the delete list, queries MediaStore, and matches by filename + size (±1KB) to avoid deleting unrelated look-alikes (camera counter resets, cross-year same-name files, etc.)._
-_`RemoteAnalysisManager` orchestrates the flow; `ThumbnailGenerator` builds thumbnails; `UploadService` chunk-uploads to the PhotoArrangeAPI via `HomelabClient`; `PreviewResultStore` persists results. The server address and auth token are stored encrypted via `SettingsRepository`; `UrlPolicy` validates the URL before every request and rejects cleartext `http://` public addresses._
 
 ## 🛠️ 构建 / Build
 
