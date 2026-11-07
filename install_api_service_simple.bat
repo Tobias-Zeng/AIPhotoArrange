@@ -87,11 +87,13 @@ if "%NEED_USER%"=="1" (
         pause
         exit /b 1
     )
-    wmic useraccount where "Name='%SVC_ACCOUNT%'" set PasswordExpires=FALSE >nul 2>&1
     echo   Account %SVC_ACCOUNT% created.
 ) else (
     echo   Account %SVC_ACCOUNT% already exists ^(left unchanged^).
 )
+REM wmic is removed on newer Windows; use PowerShell so the flag is actually applied
+REM every install (idempotent), preventing password expiry from breaking the service.
+powershell -NoProfile -Command "Set-LocalUser -Name '%SVC_ACCOUNT%' -PasswordNeverExpires $true" >nul 2>&1
 
 echo [Step 3] Copying binaries to %INSTALL_DIR% ...
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
